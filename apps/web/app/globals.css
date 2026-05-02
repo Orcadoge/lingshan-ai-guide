@@ -9,6 +9,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* 禅意色板 */
+  --color-zen-paper: #F7F7F4;
+  --color-zen-bamboo: #5C7A68;
+  --color-zen-glaze: #D4B068;
+  --color-zen-ash: #666666;
+  --color-zen-ink: #2D2E2C;
+  --color-zen-fog: rgba(247, 247, 244, 0.72);
+  --color-zen-glass: rgba(255, 255, 255, 0.25);
 }
 
 * {

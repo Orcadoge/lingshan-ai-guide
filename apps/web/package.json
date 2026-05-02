@@ -16,6 +16,7 @@
     "@handan/shared": "workspace:*",
     "@handan/ui": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
+    "echarts": "^5.6.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.544.0",
     "maplibre-gl": "^5.23.0",
