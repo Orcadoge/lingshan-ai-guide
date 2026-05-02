@@ -150,3 +150,86 @@ model PromptConfig {
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 }
+
+// === 新增：数字人/情感分析/会话统计 ===
+
+model VisitorSession {
+  id            String   @id @default(cuid())
+  source        String   // WEB / APP / TERMINAL
+  deviceInfo    String?
+  startedAt     DateTime @default(now())
+  endedAt       DateTime?
+  hasVoice      Boolean  @default(false)
+  hasDigitalHuman Boolean @default(false)
+  messageCount  Int      @default(0)
+  conversionStatus String @default("active") // active / completed / abandoned
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  emotions      VisitorEmotion[]
+  analytics     SessionAnalytics?
+}
+
+model VisitorEmotion {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       VisitorSession @relation(fields: [sessionId], references: [id])
+  source        EmotionSource @default(TEXT)
+  textContent   String?
+  textSentiment Json?    // { emotion, confidence, details, keywords }
+  voiceFeatures Json?    // { pitch, energy, speed } - 预留
+  faceFeatures  Json?    // { expression, intensity } - 预留
+  poiId         String?
+  createdAt     DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+enum EmotionSource {
+  TEXT
+  VOICE
+  FACE
+  FUSED
+}
+
+model SessionAnalytics {
+  id             String   @id @default(cuid())
+  sessionId      String   @unique
+  session        VisitorSession @relation(fields: [sessionId], references: [id])
+  totalEmotions  Int      @default(0)
+  positiveCount  Int      @default(0)
+  neutralCount   Int      @default(0)
+  negativeCount  Int      @default(0)
+  topEmotion     String   @default("neutral") // positive / neutral / negative
+  satisfactionScore Float? // 0-100
+  updatedAt      DateTime @updatedAt
+}
+
+model DigitalHumanConfig {
+  id             String   @id @default(cuid())
+  name           String
+  provider       String   @default("did") // did / volcengine / local
+  avatarImageUrl String?
+  sourceUrl      String?  // D-ID source image URL
+  voiceType      String?  // TTS voice ID
+  modelId        String?  // 3D model reference
+  isDefault      Boolean  @default(false)
+  configJson     String?  // provider-specific config
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isDefault])
+}
+
+model EmotionReport {
+  id            String   @id @default(cuid())
+  reportDate    DateTime @default(now())
+  period        String   // daily / weekly / monthly
+  totalVisitors Int
+  avgSatisfaction Float?
+  emotionDistribution Json // { positive: 0.5, neutral: 0.3, negative: 0.2 }
+  hotTopics     Json?    // ["祈福", "素斋", "梵宫"]
+  suggestions   String?
+  createdAt     DateTime @default(now())
+}
