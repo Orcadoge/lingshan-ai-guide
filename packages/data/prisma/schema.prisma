@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReviewStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SourceType {
+  official
+  audited
+  media
+  encyclopedia
+}
+
+model SourceRecord {
+  id          String      @id
+  sourceType  SourceType
+  title       String
+  url         String
+  publisher   String
+  publishedAt DateTime?
+  fetchedAt   DateTime
+  pois        Poi[]
+  foodVenues  FoodVenue[]
+  dishes      Dish[]
+}
+
+model Poi {
+  id                   String       @id
+  name                 String
+  slug                 String       @unique
+  district             String
+  level                String?
+  lat                  Float
+  lng                  Float
+  tags                 String[]
+  themeSlugs           String[]
+  intro                String
+  culturalStory        String?
+  recommendStayMinutes Int
+  openingHours         String?
+  ticketPriceRange     String?
+  suitableCrowd        String[]
+  transportTips        String?
+  nearbyFoodIds        String[]
+  sourceId             String
+  freshnessDate        DateTime
+  reviewStatus         ReviewStatus
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  source               SourceRecord @relation(fields: [sourceId], references: [id])
+}
+
+model FoodVenue {
+  id              String       @id
+  name            String
+  slug            String       @unique
+  district        String
+  lat             Float
+  lng             Float
+  avgPrice        Int
+  spicyLevel      String
+  tags            String[]
+  themeSlugs      String[]
+  intro           String
+  openingHours    String?
+  signatureDishes String[]
+  suitableCrowd   String[]
+  cultureStory    String?
+  bestTimeToEat   String?
+  sourceId        String
+  freshnessDate   DateTime
+  reviewStatus    ReviewStatus
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  source          SourceRecord @relation(fields: [sourceId], references: [id])
+}
+
+model Dish {
+  id             String       @id
+  name           String
+  slug           String       @unique
+  district       String
+  tags           String[]
+  themeSlugs     String[]
+  intro          String
+  flavor         String
+  cultureTags    String[]
+  relatedVenueIds String[]
+  sourceId       String
+  freshnessDate  DateTime
+  reviewStatus   ReviewStatus
+  bestTimeToEat  String?
+  suitableCrowd  String[]
+  spicyLevel     String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  source         SourceRecord @relation(fields: [sourceId], references: [id])
+}
+
+model Theme {
+  id             String   @id
+  name           String
+  slug           String   @unique
+  intro          String
+  seoText        String
+  heroImage      String
+  featureBullets String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PlanSession {
+  id           String   @id
+  shareId      String   @unique
+  inputPayload Json
+  parsedIntent Json
+  resultPayload Json
+  modelMeta    Json
+  createdAt    DateTime @default(now())
+  feedback     UserFeedback[]
+}
+
+model UserFeedback {
+  id            String      @id
+  planSessionId String
+  rating        Int
+  useful        Boolean
+  comment       String?
+  createdAt     DateTime    @default(now())
+  planSession   PlanSession  @relation(fields: [planSessionId], references: [id])
+}
+
+model PromptConfig {
+  id           String   @id
+  name         String
+  version      String
+  description  String
+  systemPrompt String
+  isPublished  Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}

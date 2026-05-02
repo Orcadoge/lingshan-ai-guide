@@ -1,0 +1,19 @@
+{
+  "name": "@handan/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "lint": "echo 'shared lint placeholder'",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "format": "echo 'shared format handled at repo level'"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
+  }
+}

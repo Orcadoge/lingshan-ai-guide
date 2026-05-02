@@ -1,0 +1,28 @@
+{
+  "name": "handan-llm-travel",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "dev": "turbo dev --parallel",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "format": "turbo format",
+    "db:generate": "pnpm --filter @handan/data db:generate",
+    "db:migrate": "pnpm --filter @handan/data db:migrate",
+    "db:seed": "pnpm --filter @handan/data db:seed",
+    "db:reset": "pnpm --filter @handan/data db:reset"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.6.0",
+    "dotenv-cli": "^8.0.0",
+    "turbo": "^2.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

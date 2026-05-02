@@ -1,0 +1,31 @@
+{
+  "name": "@handan/data",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "prisma"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "lint": "echo 'data lint placeholder'",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "format": "echo 'data format handled at repo level'",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma db push --schema prisma/schema.prisma",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "prisma db push --force-reset --schema prisma/schema.prisma && tsx scripts/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@handan/prompts": "workspace:*",
+    "@handan/shared": "workspace:*",
+    "@prisma/client": "^6.7.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.7.0"
+  }
+}
