@@ -1,6 +1,7 @@
 // apps/api/src/modules/emotion/emotion.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@handan/data';
 import { TextSentimentService } from './text-sentiment.service';
 
 interface RecordEmotionDto {
@@ -27,24 +28,22 @@ interface EmotionDistribution {
 @Injectable()
 export class EmotionService {
   private readonly logger = new Logger(EmotionService.name);
-  private readonly prisma: PrismaClient;
 
-  constructor(private readonly textSentiment: TextSentimentService) {
-    this.prisma = new PrismaClient();
-  }
+  constructor(private readonly textSentiment: TextSentimentService) {}
 
   async recordEmotion({ sessionId, textContent, source = 'TEXT', poiId }: RecordEmotionDto) {
-    // 1. 情感分析
+    // 1. 情感分析（LLM-based + 关键词兜底）
     const sentiment = await this.textSentiment.analyze(textContent);
 
-    // 2. 确保VisitorSession存在
-    let visitorSession = await this.prisma.visitorSession.findUnique({
+    // 2. 确保 VisitorSession 存在
+    let visitorSession = await prisma.visitorSession.findUnique({
       where: { id: sessionId },
     });
     if (!visitorSession) {
-      visitorSession = await this.prisma.visitorSession.create({
+      visitorSession = await prisma.visitorSession.create({
         data: {
           id: sessionId,
+          visitorId: sessionId,
           source,
           startedAt: new Date(),
         },
@@ -52,7 +51,7 @@ export class EmotionService {
     }
 
     // 3. 写入情感记录
-    const emotion = await this.prisma.visitorEmotion.create({
+    const emotion = await prisma.visitorEmotion.create({
       data: {
         sessionId,
         source,
@@ -63,7 +62,7 @@ export class EmotionService {
       },
     });
 
-    // 4. 更新SessionAnalytics汇总
+    // 4. 更新 SessionAnalytics 汇总
     await this.updateSessionAnalytics(sessionId);
 
     return {
@@ -74,7 +73,7 @@ export class EmotionService {
   }
 
   private async updateSessionAnalytics(sessionId: string) {
-    const emotions = await this.prisma.visitorEmotion.findMany({
+    const emotions = await prisma.visitorEmotion.findMany({
       where: { sessionId },
     });
 
@@ -93,7 +92,7 @@ export class EmotionService {
       : negative >= positive && negative >= neutral ? 'negative'
       : 'neutral';
 
-    await this.prisma.sessionAnalytics.upsert({
+    await prisma.sessionAnalytics.upsert({
       where: { sessionId },
       create: {
         sessionId,
@@ -116,7 +115,7 @@ export class EmotionService {
   }
 
   async getSessionEmotions(sessionId: string) {
-    const emotions = await this.prisma.visitorEmotion.findMany({
+    const emotions = await prisma.visitorEmotion.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'desc' },
     });
@@ -143,7 +142,7 @@ export class EmotionService {
       if (to) where.createdAt.lte = new Date(to);
     }
 
-    const emotions = await this.prisma.visitorEmotion.findMany({ where });
+    const emotions = await prisma.visitorEmotion.findMany({ where });
     const total = emotions.length;
 
     const positive = emotions.filter(e => {
