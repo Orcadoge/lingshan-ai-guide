@@ -233,3 +233,32 @@ model EmotionReport {
   suggestions   String?
   createdAt     DateTime @default(now())
 }
+
+// 官方14万游客行为数据导入表
+model VisitorBehavior {
+  id                String   @id @default(cuid())
+  touristId         String   @map("tourist_id")
+  userNickname      String?  @map("user_nickname")
+  age               Int?
+  gender            String?
+  attractionName    String   @map("attraction_name")
+  attractionContent String?  @map("attraction_content") @db.Text
+  attractionType    String?  @map("attraction_type")
+  visitDate         DateTime @map("visit_date")
+  stayDuration      Float?   @map("stay_duration")
+  ticketCost        Float?   @map("ticket_cost")
+  foodCost          Float?   @map("food_cost")
+  shoppingCost      Float?   @map("shopping_cost")
+  transportCost     Float?   @map("transport_cost")
+  entertainmentCost Float?   @map("entertainment_cost")
+  totalCost         Float?   @map("total_cost")
+  groupSize         Int?     @map("group_size")
+  satisfaction      Int?     @map("satisfaction")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([attractionName])
+  @@index([visitDate])
+  @@index([satisfaction])
+  @@map("visitor_behavior")
+}

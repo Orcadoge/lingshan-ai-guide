@@ -9,7 +9,7 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@handan/data';
 import {
   getAllPromptConfigs,
   getApprovedFoodVenues,
@@ -98,38 +98,106 @@ export class AdminController {
     return publishPromptConfig(id);
   }
 
-  // === 新增：数据大屏聚合API ===
+  // === 新增：数据大屏聚合API（基于真实14万游客数据） ===
+
+  @Get('analytics/overview')
+  async getAnalyticsOverview(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<unknown> {
+    const where: any = {};
+    if (from || to) {
+      where.visitDate = {};
+      if (from) where.visitDate.gte = new Date(from);
+      if (to) where.visitDate.lte = new Date(to);
+    }
+
+    const [
+      totalVisitors,
+      totalSessions,
+      avgSatisfactionAgg,
+      avgCostAgg,
+      genderDist,
+      ageDist,
+    ] = await Promise.all([
+      prisma.visitorBehavior.count({ where }),
+      prisma.visitorBehavior.groupBy({
+        by: ['touristId'],
+        where,
+        _count: { touristId: true },
+      }).then((r) => r.length),
+      prisma.visitorBehavior.aggregate({
+        where,
+        _avg: { satisfaction: true },
+      }),
+      prisma.visitorBehavior.aggregate({
+        where,
+        _avg: { totalCost: true },
+      }),
+      prisma.visitorBehavior.groupBy({
+        by: ['gender'],
+        where,
+        _count: { id: true },
+      }),
+      prisma.visitorBehavior.groupBy({
+        by: ['age'],
+        where: { ...where, age: { not: null } },
+        _count: { id: true },
+        orderBy: { age: 'asc' },
+      }),
+    ]);
+
+    const satisfaction = avgSatisfactionAgg._avg.satisfaction ?? 0;
+    const avgCost = avgCostAgg._avg.totalCost ?? 0;
+
+    return {
+      totalVisitors,
+      totalSessions,
+      avgSatisfaction: satisfaction.toFixed(1),
+      satisfactionRate: `${((satisfaction / 5) * 100).toFixed(1)}%`,
+      avgCost: avgCost.toFixed(2),
+      genderDistribution: genderDist.map((g) => ({
+        gender: g.gender || 'unknown',
+        count: g._count.id,
+      })),
+      ageDistribution: ageDist.map((a) => ({
+        age: a.age,
+        count: a._count.id,
+      })),
+      period: { from: from || 'all', to: to || 'all' },
+    };
+  }
 
   @Get('analytics/sessions')
   async getSessionAnalytics(
     @Query('from') from?: string,
     @Query('to') to?: string,
   ): Promise<unknown> {
-    const prisma = new PrismaClient();
     const where: any = {};
     if (from || to) {
-      where.startedAt = {};
-      if (from) where.startedAt.gte = new Date(from);
-      if (to) where.startedAt.lte = new Date(to);
+      where.visitDate = {};
+      if (from) where.visitDate.gte = new Date(from);
+      if (to) where.visitDate.lte = new Date(to);
     }
 
-    const sessions = await prisma.visitorSession.findMany({ where });
-    const total = sessions.length;
-    const withVoice = sessions.filter((s: any) => s.hasVoice).length;
-    const withDigitalHuman = sessions.filter((s: any) => s.hasDigitalHuman).length;
-    const avgMessages = total > 0
-      ? sessions.reduce((sum: number, s: any) => sum + s.messageCount, 0) / total
-      : 0;
-    const completed = sessions.filter((s: any) => s.conversionStatus === 'completed').length;
-    const conversionRate = total > 0 ? ((completed / total) * 100).toFixed(1) : '0.0';
+    const behaviors = await prisma.visitorBehavior.findMany({ where });
+    const total = behaviors.length;
+    const uniqueVisitors = new Set(behaviors.map((b) => b.touristId)).size;
+    const avgGroupSize =
+      total > 0
+        ? behaviors.reduce((sum, b) => sum + (b.groupSize || 1), 0) / total
+        : 0;
+    const avgStayDuration =
+      total > 0
+        ? behaviors.reduce((sum, b) => sum + (b.stayDuration || 0), 0) / total
+        : 0;
 
-    await prisma.$disconnect();
     return {
-      totalSessions: total,
-      withVoice,
-      withDigitalHuman,
-      avgMessagesPerSession: avgMessages.toFixed(1),
-      conversionRate: `${conversionRate}%`,
+      totalBehaviors: total,
+      uniqueVisitors,
+      avgGroupSize: avgGroupSize.toFixed(1),
+      avgStayDuration: avgStayDuration.toFixed(1),
+      period: { from: from || 'all', to: to || 'all' },
     };
   }
 
@@ -138,35 +206,37 @@ export class AdminController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ): Promise<unknown> {
-    const prisma = new PrismaClient();
     const where: any = {};
     if (from || to) {
-      where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to);
+      where.visitDate = {};
+      if (from) where.visitDate.gte = new Date(from);
+      if (to) where.visitDate.lte = new Date(to);
     }
 
-    const emotions = await prisma.visitorEmotion.findMany({ where });
-    const total = emotions.length;
+    const behaviors = await prisma.visitorBehavior.findMany({ where });
+    const total = behaviors.length;
 
-    const positive = emotions.filter((e: any) => {
-      const s = e.textSentiment as any;
-      return s?.emotion === 'positive';
-    }).length;
-    const negative = emotions.filter((e: any) => {
-      const s = e.textSentiment as any;
-      return s?.emotion === 'negative';
-    }).length;
+    // 基于满意度(1-5)映射为情感分布
+    // 5→positive, 4→positive, 3→neutral, 2→negative, 1→negative
+    const positive = behaviors.filter((b) => (b.satisfaction || 0) >= 4).length;
+    const negative = behaviors.filter((b) => (b.satisfaction || 0) <= 2).length;
     const neutral = total - positive - negative;
 
-    await prisma.$disconnect();
     return {
       total,
-      counts: { positive, neutral, negative, other: 0 },
+      counts: { positive, neutral, negative },
       percentages: {
         positive: total > 0 ? ((positive / total) * 100).toFixed(1) : '0.0',
         neutral: total > 0 ? ((neutral / total) * 100).toFixed(1) : '0.0',
         negative: total > 0 ? ((negative / total) * 100).toFixed(1) : '0.0',
+      },
+      // 细粒度：五维情感（基于满意度分布）
+      fineDistribution: {
+        happy: behaviors.filter((b) => (b.satisfaction || 0) === 5).length,
+        calm: behaviors.filter((b) => (b.satisfaction || 0) === 4).length,
+        confused: behaviors.filter((b) => (b.satisfaction || 0) === 3).length,
+        tired: behaviors.filter((b) => (b.satisfaction || 0) === 2).length,
+        dissatisfied: behaviors.filter((b) => (b.satisfaction || 0) === 1).length,
       },
       period: { from: from || 'all', to: to || 'all' },
     };
@@ -174,7 +244,14 @@ export class AdminController {
 
   @Get('analytics/hot-questions')
   async getHotQuestions(): Promise<unknown> {
-    const prisma = new PrismaClient();
+    // 基于景点名称统计"热门问答"（游客最常去的景点 ≈ 最关心的问题）
+    const hotAttractions = await prisma.visitorBehavior.groupBy({
+      by: ['attractionName'],
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 10,
+    });
+
     const sessions = await prisma.planSession.findMany({
       take: 1000,
       orderBy: { createdAt: 'desc' },
@@ -189,45 +266,87 @@ export class AdminController {
       }
     }
 
-    const sorted = Object.entries(queryCounts)
+    const sortedQueries = Object.entries(queryCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([query, count]) => ({ query, count }));
 
-    await prisma.$disconnect();
-    return { top10: sorted };
+    return {
+      top10Questions: sortedQueries,
+      top10Attractions: hotAttractions.map((a) => ({
+        name: a.attractionName,
+        visitCount: a._count.id,
+      })),
+    };
   }
 
   @Get('analytics/hot-pois')
   async getHotPois(): Promise<unknown> {
-    const prisma = new PrismaClient();
-    const emotions = await prisma.visitorEmotion.findMany({
-      where: { poiId: { not: null } },
+    // 基于14万游客数据统计景点热度
+    const hotAttractions = await prisma.visitorBehavior.groupBy({
+      by: ['attractionName'],
+      _count: { id: true },
+      _avg: { satisfaction: true, stayDuration: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 10,
     });
 
-    const poiCounts: Record<string, number> = {};
-    for (const e of emotions) {
-      if (e.poiId) {
-        poiCounts[e.poiId] = (poiCounts[e.poiId] || 0) + 1;
+    return {
+      top10: hotAttractions.map((a) => ({
+        name: a.attractionName,
+        visitCount: a._count.id,
+        avgSatisfaction: a._avg.satisfaction?.toFixed(1) || 'N/A',
+        avgStayDuration: a._avg.stayDuration?.toFixed(1) || 'N/A',
+      })),
+    };
+  }
+
+  @Get('analytics/satisfaction-trend')
+  async getSatisfactionTrend(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<unknown> {
+    const where: any = {};
+    if (from || to) {
+      where.visitDate = {};
+      if (from) where.visitDate.gte = new Date(from);
+      if (to) where.visitDate.lte = new Date(to);
+    }
+
+    // 按日期分组统计满意度趋势
+    const behaviors = await prisma.visitorBehavior.findMany({
+      where,
+      select: { visitDate: true, satisfaction: true },
+      orderBy: { visitDate: 'asc' },
+    });
+
+    const dailyMap: Record<string, { sum: number; count: number }> = {};
+    for (const b of behaviors) {
+      if (!b.visitDate) continue;
+      const dateKey = b.visitDate.toISOString().split('T')[0];
+      if (!dailyMap[dateKey]) dailyMap[dateKey] = { sum: 0, count: 0 };
+      if (b.satisfaction !== null) {
+        dailyMap[dateKey].sum += b.satisfaction;
+        dailyMap[dateKey].count += 1;
       }
     }
 
-    const sorted = Object.entries(poiCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([poiId, count]) => ({ poiId, count }));
+    const trend = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { sum, count }]) => ({
+        date,
+        avgSatisfaction: count > 0 ? (sum / count).toFixed(2) : null,
+        sampleCount: count,
+      }));
 
-    await prisma.$disconnect();
-    return { top10: sorted };
+    return { trend, totalDays: trend.length };
   }
 
   @Get('digital-human/configs')
   async listDigitalHumanConfigs(): Promise<unknown> {
-    const prisma = new PrismaClient();
     const configs = await prisma.digitalHumanConfig.findMany({
       orderBy: { isDefault: 'desc' },
     });
-    await prisma.$disconnect();
     return configs;
   }
 
@@ -244,7 +363,6 @@ export class AdminController {
       configJson?: string;
     },
   ): Promise<unknown> {
-    const prisma = new PrismaClient();
     if (body.isDefault) {
       await prisma.digitalHumanConfig.updateMany({
         where: { isDefault: true },
@@ -252,15 +370,12 @@ export class AdminController {
       });
     }
     const config = await prisma.digitalHumanConfig.create({ data: body });
-    await prisma.$disconnect();
     return config;
   }
 
   @Post('digital-human/configs/:id/delete')
   async deleteDigitalHumanConfig(@Param('id') id: string): Promise<unknown> {
-    const prisma = new PrismaClient();
     const result = await prisma.digitalHumanConfig.delete({ where: { id } });
-    await prisma.$disconnect();
     return result;
   }
 }
